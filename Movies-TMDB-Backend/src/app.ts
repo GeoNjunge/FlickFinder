@@ -7,6 +7,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { securityMiddleware } from "./Middleware/security.middlware.js";
 import logger from "./Config/logger.js";
+import moviesRouter from "./Routes/movies.routes.js";
 
 dotenv.config();
 
@@ -41,5 +42,7 @@ app.get("/health", (req, res) => {
 app.get("/api", (req, res) => {
   res.status(200).send("Movies API is running");
 });
+
+app.use("/api/v1/movies", moviesRouter);
 
 export default app;

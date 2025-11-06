@@ -89,7 +89,6 @@ A secure Express.js backend API for a movies application, built with TypeScript 
 - 🚀 **TypeScript**: Full TypeScript support with ES modules
 - ⚡ **Hot Reload**: Development mode with nodemon
 
-
 ## Prerequisites
 
 - Node.js (v18 or higher)
@@ -227,6 +226,90 @@ Confirms the API is running.
 Movies API is running
 ```
 
+## ⚡ Redis Caching Integration
+
+This project uses **Redis** for caching API and database responses to improve performance and reduce redundant calls to third-party services (like TMDB) and MongoDB.
+
+### 🧩 Why Redis
+
+Redis acts as an **in-memory cache layer** between the API and external data sources.
+Fetching data from Redis is typically **10–100× faster** than querying an API or database directly.
+
+---
+
+### 🧠 How It Works
+
+1. **Check Cache First** – Before making a network or database call, the service checks Redis for a cached copy of the requested data.
+2. **Fallback to Source** – If the cache is empty, it fetches the data from TMDB or MongoDB.
+3. **Store in Redis** – The fresh data is then serialized and stored in Redis with a short **TTL (time-to-live)**, so it expires and refreshes automatically.
+
+```ts
+// Example: Caching movie fetch results
+const cacheKey = `movies:page:${page}:search:${searchTerm || "none"}`;
+
+const cached = await redis.get(cacheKey);
+if (cached) {
+  return JSON.parse(cached); // ✅ Instant cache hit
+}
+
+// ❌ Cache miss – fetch from TMDB API
+const data = await fetchMoviesFromTMDB(page, searchTerm);
+
+// Store in Redis for next time (expires in 1 hour)
+await redis.set(cacheKey, JSON.stringify(data), { EX: 3600 });
+return data;
+```
+
+---
+
+### 🔁 Trending & Counts Sync (Redis-OM)
+
+Structured data like **search counts** and **trending movies** are stored both in MongoDB and Redis using [`redis-om`](https://github.com/redis/redis-om-node).
+
+```ts
+const existing = await TrendingRepository.search()
+  .where("searchTerm")
+  .eq(searchTerm)
+  .return.first();
+
+if (existing) {
+  existing.count += 1;
+  await TrendingRepository.save(existing);
+} else {
+  await TrendingRepository.createAndSave({
+    searchTerm,
+    title: movie.title,
+    movieId: movie.id,
+    posterPath: `https://image.tmdb.org/t/p/w500/${movie.poster_path}`,
+    count: 1,
+    lastSearchedAt: new Date(),
+  });
+}
+```
+
+This ensures that:
+
+- MongoDB is the **source of truth**
+- Redis provides **fast access** to trending data
+- Both stay in sync when updates occur
+
+---
+
+### 🧰 Setup
+
+```bash
+# Start Redis (recommended: Redis Stack)
+docker run -d --name redis-stack -p 6379:6379 redis/redis-stack:latest
+```
+
+Configure your `.env`:
+
+```bash
+REDIS_URL=redis://localhost:6379
+```
+
+---
+
 ## Security Features
 
 ### Arcjet Protection
@@ -325,11 +408,13 @@ docker build -t movies-app .
 #### Running with Docker
 
 **Option 1: Using environment file (Recommended)**
+
 ```bash
 docker run -p 4000:4000 --env-file .env movies-app
 ```
 
 **Option 2: Passing environment variables directly**
+
 ```bash
 docker run -p 4000:4000 \
   -e MONGO_URI="mongodb+srv://username:password@cluster.mongodb.net/movies_app" \
@@ -339,6 +424,7 @@ docker run -p 4000:4000 \
 ```
 
 **Option 3: Running in development mode**
+
 ```bash
 docker build --target development -t movies-app-dev .
 docker run -p 4000:4000 --env-file .env -v $(pwd)/src:/app/src movies-app-dev
@@ -362,9 +448,11 @@ The Dockerfile includes three stages:
 ### Docker Troubleshooting
 
 **Issue**: Database connection failed
+
 ```
 error: Database connection failed: Invalid scheme, expected connection string to start with "mongodb://" or "mongodb+srv://"
 ```
+
 **Solution**: Make sure to pass environment variables using `--env-file .env` flag
 
 **Issue**: dotenv injecting env (0) from .env
@@ -392,7 +480,7 @@ ISC
 
 ## Author
 
-Your Name
+UnfitBeard
 
 ---
 

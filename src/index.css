@@ -160,3 +160,28 @@
     display: none;
   }
 }
+
+body.active-modal {
+  overflow-y: hidden;
+}
+
+.btn-modal {
+  @apply py-0 px-10 my-[100px] mx-auto text-[18px];
+}
+
+.modal,
+.overlay {
+  @apply fixed top-0 left-0 right-0  w-full h-full;
+}
+
+.overlay {
+  @apply bg-violet-950;
+}
+
+.modal-content {
+  @apply absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-light-100 py-3.5 px-7 rounded-md shadow-lg max-w-[600px] min-w-[300px];
+}
+
+.close-modal {
+  @apply absolute top-2.5 right-2.5 px-[5px] py-[7px];
+}

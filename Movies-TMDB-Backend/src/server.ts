@@ -7,7 +7,7 @@ connectDatabase()
   .then(() => {
     console.log("Database connected, starting server...");
     app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+      console.log(`Server is at http://localhost:${PORT}`);
     });
   })
   .catch((error) => {

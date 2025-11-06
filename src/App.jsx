@@ -4,24 +4,10 @@ import Search from "./components/Search";
 import Spinner from "./components/Spinner";
 import MovieCard from "./components/MovieCard";
 import { useDebounce } from "react-use";
-import {
-  getTrendingMovies,
-  logEnvVariables,
-  updatedSearchCount,
-} from "./appwrite";
 
 const API_BASE_URL =
   "https://api.themoviedb.org/3/discover/movie?include_adult=false&include_video=false&language=en-US&page=1&sort_by=popularity.desc";
 const API_KEY = import.meta.env.VITE_TMBD_API_KEY;
-const APIOPTIONS = {
-  headers: {
-    method: "GET",
-    headers: {
-      accept: "application/json",
-      Authorization: `Bearer ${API_KEY}`,
-    },
-  },
-};
 
 const App = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,9 +17,7 @@ const App = () => {
   const [debounceSearchTerm, setDebounceSearchTerm] = useState("");
   const [trendingMovies, setTrendingMovies] = useState([]);
 
-  const API_URL =
-    "https://api.themoviedb.org/3/discover/movie?include_adult=false&include_video=false&language=en-US&page=1&sort_by=popularity.desc";
-
+  const BACKEND_URL = "http://localhost:4000/api/v1/movies/search";
   // **Replace the placeholder with your actual, full token**
   const API_ACCESS_TOKEN = import.meta.env.VITE_READ_ACCESS_TOKEN;
 
@@ -47,18 +31,19 @@ const App = () => {
 
   useDebounce(() => setDebounceSearchTerm(searchTerm), 500, [searchTerm]);
 
-  const fetchMovies = async (query = "") => {
+  const fetchMovies = async (query = "", page = 1) => {
     setIsLoading(true);
     setErrorMessage("");
 
     try {
       // Use the full URL
       const endpoint = query
-        ? "https://api.themoviedb.org/3/search/movie?query=" +
-          encodeURIComponent(query) +
-          "&include_adult=false&language=en-US&page=1"
-        : API_URL;
-      const response = await fetch(endpoint, APIOPTIONS);
+        ? `http://localhost:4000/api/v1/movies/search?searchTerm=${encodeURIComponent(
+            query
+          )}`
+        : `http://localhost:4000/api/v1/movies/search?page=${page}`; // Default/discover path
+
+      const response = await fetch(endpoint);
 
       if (!response.ok) {
         // You'll likely see a 401 Unauthorized error here if the token/headers are wrong
@@ -76,7 +61,7 @@ const App = () => {
       setMovieList(data.results || []); // Update movie list
 
       if ((query && data.results) || []) {
-        await updatedSearchCount(query, data.results[0]);
+        loadTrendingMovies();
       }
       console.log("Fetched movies:", data);
       return data; // Return the data
@@ -90,9 +75,19 @@ const App = () => {
 
   const loadTrendingMovies = async () => {
     try {
-      const movies = await getTrendingMovies();
+      const response = await fetch(
+        `http://localhost:4000/api/v1/movies/trending`
+      );
 
-      setTrendingMovies(movies || []);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const moviesData = await response.json(); // <-- Await response.json()
+
+      console.log("Trending movies data:", moviesData);
+
+      setTrendingMovies(moviesData || []); // Use the parsed JSON data
     } catch (error) {
       console.error("Error loading trending movies:", error);
     }
@@ -129,7 +124,7 @@ const App = () => {
                 {trendingMovies.map((movie, index) => (
                   <li key={movie.$id}>
                     <p>{index + 1}</p>
-                    <img src={movie.poster_url} alt={movie.title} />
+                    <img src={movie.posterPath} alt={movie.title} />
                   </li>
                 ))}
               </ul>
