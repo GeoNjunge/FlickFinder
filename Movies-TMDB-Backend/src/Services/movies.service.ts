@@ -5,6 +5,7 @@ import {
   fetchTrendingMovies,
   updateSearchCount,
 } from "../Controllers/movies.controller.js";
+import { skip } from "node:test";
 
 export const getMovies = async (
   req: Request,
@@ -13,7 +14,7 @@ export const getMovies = async (
 ) => {
   try {
     logger.info("Fetching movies from TMDB API");
-    
+
     const response = await fetchMovies(1, req.query.searchTerm as string);
 
     if (!response) {
@@ -21,13 +22,20 @@ export const getMovies = async (
       return res.status(404).json({ message: "No movies found" });
     }
 
-    if (response.results.length === 0) {
-      logger.warn("Movies data is empty");
-      return res.status(204).send();
+    if (!response || !Array.isArray(response.results)) {
+      logger.error("Invalid movies data structure received", { response });
+      return res
+        .status(500)
+        .json({ message: "Invalid data format from TMDB or cache" });
     }
 
     if (response.results.length > 0 && req.query.searchTerm) {
-      updateSearchCount(req.query.searchTerm as string, response.results[0]);
+      updateSearchCount(
+        req.query.searchTerm as string,
+        response.results[0]
+      ).catch((error) => {
+        logger.error("Error updating search count:", error);
+      });
     }
 
     logger.info("Movies data fetched successfully");

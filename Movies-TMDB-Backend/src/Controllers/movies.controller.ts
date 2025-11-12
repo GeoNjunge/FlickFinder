@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import CountsModel from "../Schemas/counts.schema.js";
 import { TrendingRepository } from "../Redis/redis.schema.js";
 import { redisConnection } from "../Config/redis.js";
+import { generateLockKeyAndCache } from "../Redis/mutexLock.js";
 
 dotenv.config();
 
@@ -11,18 +12,39 @@ const token = process.env.VITE_READ_ACCESS_TOKEN;
 
 const DISCOVER_URL = "https://api.themoviedb.org/3/discover/movie";
 const SEARCH_URL = "https://api.themoviedb.org/3/search/movie"; // New dedicated search URL
+const TTL = 3600 + Math.floor(Math.random() * 300); // 1 hour plus up to 5 minutes random
 const APIOPTIONS = {};
 
-export const fetchMovies = async (page: number, searchTerm: string) => {
+export const fetchMovies = async (
+  page: number,
+  searchTerm: string,
+  skipCache: boolean = false
+) => {
   const cacheKey = searchTerm
     ? `movies:search:${searchTerm}:page:${page}`
     : `movies:discover:page:${page}`;
   try {
-    // Check cache first
-    const cached = await redisConnection.get(cacheKey);
-    if (cached) {
-      logger.info(`Cache hit for key ${cacheKey}`);
-      return JSON.parse(cached);
+    if (!skipCache) {
+      // Check cache first
+      const cached = await redisConnection.get(cacheKey);
+      if (cached) {
+        logger.info(`Cache hit for key ${cacheKey}`);
+
+        const { data, expiresAt } = JSON.parse(cached);
+
+        // Serve stale data if near expiry
+        if (Date.now() > expiresAt) {
+          logger.info(
+            `Cache near expiry for key ${cacheKey}, serving stale data`
+          );
+          generateLockKeyAndCache(cacheKey, page, searchTerm, TTL).catch(
+            (err) => {
+              logger.error("Error refreshing cache:", err);
+            }
+          );
+        }
+        return data;
+      }
     }
 
     // No cache then fetch from TMDB
@@ -75,7 +97,11 @@ export const fetchMovies = async (page: number, searchTerm: string) => {
     logger.info("Movies fetched successfully from TMDB API", data);
 
     //cache the response foer 1 hour
-    await redisConnection.set(cacheKey, JSON.stringify(data), { EX: 3600 });
+    await redisConnection.set(
+      cacheKey,
+      JSON.stringify({ data, expiresAt: Date.now() + TTL }),
+      { EX: TTL }
+    );
     logger.info(`cached response for key ${cacheKey}`);
 
     return data;
@@ -128,7 +154,7 @@ export const updateSearchCount = async (searchTerm: string, movie: any) => {
 
 export const fetchTrendingMovies = async () => {
   try {
-    const redisTrending = TrendingRepository.search()
+    const redisTrending = await TrendingRepository.search()
       .sortDesc("count")
       .returnAll();
 
