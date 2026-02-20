@@ -4,7 +4,7 @@
 
 This is a quick look at the main screen of the application.
 
-![App Screenshot of the Main Dashboard](public/appscreenshot.png)
+![App Screenshot of the Main Dashboard](frontend/public/appscreenshot.png)
 
 ## Project Structure
 
